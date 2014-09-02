@@ -295,7 +295,8 @@ handle_call(get_requests, _From, State) ->
 
 handle_call(stop, _From, #state{} = State) ->
     StreamEnd = escalus_stanza:stream_end(),
-    {ok, _Reply, NewState} =
+    % We are stopping, don't care if it failed or not.
+    {_, _Reply, NewState} =
     sync_send0(transport(State), exml:to_iolist(StreamEnd), State),
     {stop, normal, ok, NewState}.
 
@@ -357,8 +358,12 @@ request(#client{socket = {Client, Path}}, Body, OnReplyFun) ->
         fusco_cp:request(Client, Path, "POST", Headers, exml:to_iolist(Body),
                          2, infinity),
     OnReplyFun(Reply),
-    {ok, {_Status, _Headers, RBody, _Size, _Time}} = Reply,
-    {ok, RBody}.
+    case Reply of
+        {ok, {_Status, _Headers, RBody, _Size, _Time}} ->
+            {ok, RBody};
+        {error, _} = Error ->
+            Error
+    end.
 
 close_requests(#state{requests=Reqs} = S) ->
     [exit(Pid, normal) || {_Ref, Pid} <- Reqs],
@@ -375,8 +380,12 @@ send(Transport, Body, NewRid, #state{requests = Requests, on_reply = OnReplyFun}
     Ref = make_ref(),
     Self = self(),
     AsyncReq = fun() ->
-            {ok, Reply} = request(Transport, Body, OnReplyFun),
-            Self ! {http_reply, Ref, Reply, Transport}
+            case request(Transport, Body, OnReplyFun) of
+                {ok, Reply} ->
+                    Self ! {http_reply, Ref, Reply, Transport};
+                {error, _} = Error ->
+                    Error
+            end
     end,
     NewRequests = [{Ref, proc_lib:spawn_link(AsyncReq)} | Requests],
     S#state{rid = NewRid, requests = NewRequests}.
@@ -385,8 +394,12 @@ sync_send(_, _, S=#state{terminated = true}) ->
     %% Sending anything to a terminated session is pointless. We're done.
     {ok, already_terminated, S};
 sync_send(Transport, Body, S=#state{on_reply = OnReplyFun}) ->
-    {ok, Reply} = request(Transport, Body, OnReplyFun),
-    {ok, Reply, S#state{rid = S#state.rid+1}}.
+    case request(Transport, Body, OnReplyFun) of
+        {ok, Reply} ->
+            {ok, Reply, S#state{rid = S#state.rid+1}};
+        {error, Error} ->
+            {error, Error, S}
+    end.
 
 send0(Transport, Elem, State) ->
     send(Transport, wrap_elem(Elem, State), State).
