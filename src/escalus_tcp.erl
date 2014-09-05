@@ -152,15 +152,19 @@ init([Args, Owner]) ->
 
     Address = host_to_inet(Host),
     Opts = [binary, {active, once}],
-    {ok, Socket} = do_connect(Address, Port, Opts, OnConnectFun),
-    {ok, Parser} = exml_stream:new_parser(),
-    {ok, #state{owner = Owner,
-                socket = Socket,
-                parser = Parser,
-                sm_state = SM,
-                event_client = EventClient,
-                on_reply = OnReplyFun,
-                on_request = OnRequestFun}}.
+    case do_connect(Address, Port, Opts, OnConnectFun) of
+        {ok, Socket} ->
+            {ok, Parser} = exml_stream:new_parser(),
+            {ok, #state{owner = Owner,
+                        socket = Socket,
+                        parser = Parser,
+                        sm_state = SM,
+                        event_client = EventClient,
+                        on_reply = OnReplyFun,
+                        on_request = OnRequestFun}};
+        _Error ->
+            {stop, connect_failed}
+    end.
 
 handle_call(get_sm_h, _From, #state{sm_state = {_, H, _}} = State) ->
     {reply, H, State};
