@@ -262,7 +262,7 @@ init([Args, Owner]) ->
                         client = Client,
                         on_reply = OnReplyFun}};
         _Error ->
-        {stop, connect_failed}
+        {stop, normal}
     end.
 
 handle_call(get_transport, _From, State) ->
