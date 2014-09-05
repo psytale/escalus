@@ -81,6 +81,7 @@ starttls(Conn, Props) ->
 
 authenticate(Conn, Props) ->
     %% FIXME: as default, select authentication scheme based on stream features
+    escalus_session:stream_features(Conn, Props, []),
     {M, F} = proplists:get_value(auth, Props, {escalus_auth, auth_plain}),
     M:F(Conn, Props),
     escalus_connection:reset_parser(Conn),
