@@ -163,7 +163,7 @@ init([Args, Owner]) ->
                         on_reply = OnReplyFun,
                         on_request = OnRequestFun}};
         _Error ->
-            {stop, connect_failed}
+            {stop, normal}
     end.
 
 handle_call(get_sm_h, _From, #state{sm_state = {_, H, _}} = State) ->
