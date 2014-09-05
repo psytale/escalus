@@ -323,20 +323,25 @@ handle_cast(reset_parser, #state{parser = Parser} = State) ->
 
 
 %% Handle async HTTP request replies.
-handle_info({http_reply, Ref, Body, Transport}, S) ->
+handle_info({http_reply, Ref, Body, Transport}, #state{owner = Owner} = S) ->
     NewRequests = lists:keydelete(Ref, 1, S#state.requests),
-    {ok, #xmlel{attrs=Attrs} = XmlBody} = exml:parse(Body),
-    NS = handle_data(XmlBody, S#state{requests = NewRequests}),
-    NNS = case {detect_type(Attrs), NS#state.keepalive, NS#state.requests == []}
-          of
-              {streamend, _, _} -> close_requests(NS#state{terminated=true});
-              {_, false, _}     -> NS;
-              {_, true, true}   -> send(Transport, 
-                                        empty_body(NS#state.rid, NS#state.sid),
-                                        NS);
-              {_, true, false}  -> NS
-    end,
-    {noreply, NNS};
+    case exml:parse(Body) of
+        {ok, #xmlel{attrs=Attrs} = XmlBody} ->     
+            NS = handle_data(XmlBody, S#state{requests = NewRequests}),
+            NNS = case {detect_type(Attrs), NS#state.keepalive, NS#state.requests == []}
+            of
+                {streamend, _, _} -> close_requests(NS#state{terminated=true});
+                {_, false, _}     -> NS;
+                {_, true, true}   -> send(Transport, 
+                                          empty_body(NS#state.rid, NS#state.sid),
+                                          NS);
+                {_, true, false}  -> NS
+            end,
+            {noreply, NNS};
+        _Error ->
+            Owner ! {error, parse_error},
+            S
+    end;
 handle_info(_, State) ->
     {noreply, State}.
 
